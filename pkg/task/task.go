@@ -6,6 +6,7 @@ import (
 	"strings"
 	"errors"
 	"syscall"
+	"github.com/rs/xid"
 )
 
 const (
@@ -16,16 +17,14 @@ const (
 	FATAL = "fatal"
 )
 
-// Models a single task
+// An abstraction over linux process
 type Task interface {
-	Init(string) error
-	GetOutput() (io.ReadCloser, error)
-	GetInput() (io.WriteCloser, error)
 	Run() error
 	Kill() error
 	Pause() error
 	Resume() error
 	GetStatus() string
+	GetPID() int
 }
 
 type CommandTask struct {
@@ -33,19 +32,23 @@ type CommandTask struct {
 	cmd *exec.Cmd
 }
 
-func(c *CommandTask) Init(command string) error {
+// Returns a random string to be used a identifier
+func(c *CommandTask) Init(command string) string {
+	guid := xid.New()
 	args := strings.Split(command, " ")
 	c.cmd = exec.Command(args[0], args[1:]...)
 	c.status = INIT
-	return nil
+	return guid.String()
 }
 
+// Sets the stdout and stderr of the process to the supplied writer
 func(c *CommandTask) SetOutput(w io.Writer) error {
 	c.cmd.Stdout = w
 	c.cmd.Stderr = w
 	return nil
 }
 
+// Sets the stdin of the process to the supplied reader
 func(c *CommandTask) SetInput(r io.Reader) error {
 	c.cmd.Stdin = r
 	return nil
@@ -87,6 +90,8 @@ func(c *CommandTask) Pause() error {
 	return nil
 }
 
+// Sends the continue signal to a paused process
+// Platform Dependent
 func(c *CommandTask) Resume() error {
 	err := c.cmd.Process.Signal(syscall.SIGCONT)
 	if err != nil {
@@ -96,7 +101,11 @@ func(c *CommandTask) Resume() error {
 	return nil
 }
 
-
+// Returns the status as the consts defined earlier
 func(c *CommandTask) GetStatus() string {
 	return c.status
+}
+
+func(c *CommandTask) GetPID() int {
+	return c.cmd.Process.Pid
 }
