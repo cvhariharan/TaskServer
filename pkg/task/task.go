@@ -15,6 +15,9 @@ const (
 	DONE = "done"
 	PAUSE = "pause"
 	FATAL = "fatal"
+	KILL_ACTION = "kill"
+	PAUSE_ACTION = "stop"
+	RESUME_ACTION = "resume"
 )
 
 // An abstraction over linux process
