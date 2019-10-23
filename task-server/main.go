@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"os"
 	"encoding/json"
 	"github.com/cvhariharan/Atlan-Task/pkg/task"
 	"github.com/gomodule/redigo/redis"
@@ -54,7 +55,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	id := c.Init("cp /dev/stdin " + uploadInfo.Filename)
 	fmt.Println(id)
 	c.SetInput(re)
-	if utils.InsertTask(conn, id, uploadInfo.Username, c.GetStatus(), "127.0.0.1:9000") {
+	if utils.InsertTask(conn, id, uploadInfo.Username, c.GetStatus(), os.Getenv("TASK_SERVER")) {
 		processMap[id] = c
 	}
 
@@ -94,7 +95,7 @@ func loop(w http.ResponseWriter, r *http.Request) {
 	c := new(task.CommandTask)
 	id := c.Init("python loop.py")
 	fmt.Println(id)
-	if utils.InsertTask(conn, id, username, c.GetStatus(), "127.0.0.1:9000") {
+	if utils.InsertTask(conn, id, username, c.GetStatus(), os.Getenv("TASK_SERVER")) {
 		processMap[id] = c
 	}
 	go func() {
@@ -107,7 +108,7 @@ func loop(w http.ResponseWriter, r *http.Request) {
 	// Update the status of the task every second
 	go func() {
 		for {
-			utils.UpdateStatus(conn, "127.0.0.1:9000:"+id, c.GetStatus())
+			utils.UpdateStatus(conn, os.Getenv("TASK_SERVER")+":"+id, c.GetStatus())
 			time.Sleep(1000 * time.Millisecond)
 		}
 	}()
@@ -145,6 +146,13 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	port := ":9000"
+	server := utils.GetLocalIP()+port
+	if server == "" {
+		server = "127.0.0.1:9000"
+	}
+	os.Setenv("TASK_SERVER", server)
+
 	Conn, err := redis.Dial("tcp", "localhost:6379")
 	if err != nil {
 		panic(err)
@@ -152,10 +160,18 @@ func main() {
 	conn = Conn
 
 	processMap = make(map[string]task.Task)
-	// fmt.Println(utils.GetTask(conn, "bmnv3rn20qitifrqfpcg", "127.0.0.1:9000", "Tr"))
-	// fmt.Println(utils.GetAllTasks(conn, "TestUser"))
+
+	// Heartbeat every second
+	go func() {
+		for {
+			utils.Heartbeat(conn, os.Getenv("TASK_SERVER"))
+			time.Sleep(1000 * time.Millisecond)
+		}
+	}()
+	
+
 	http.HandleFunc("/uploads", upload)
 	http.HandleFunc("/loop", loop)
 	http.HandleFunc("/tasks", taskHandler)
-	log.Fatal(http.ListenAndServe(":9000", nil))
+	log.Fatal(http.ListenAndServe(port, nil))
 }
