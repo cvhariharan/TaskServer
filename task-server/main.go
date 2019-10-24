@@ -57,6 +57,8 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	c.SetInput(re)
 	if utils.InsertTask(conn, id, uploadInfo.Username, c.GetStatus(), os.Getenv("TASK_SERVER")) {
 		processMap[id] = c
+		t := utils.Response{id, ""}
+		ws.WriteJSON(t)
 	}
 
 	wg.Add(1)
@@ -108,8 +110,8 @@ func loop(w http.ResponseWriter, r *http.Request) {
 	// Update the status of the task every second
 	go func() {
 		for {
-			utils.UpdateStatus(conn, os.Getenv("TASK_SERVER")+":"+id, c.GetStatus())
 			time.Sleep(1000 * time.Millisecond)
+			utils.UpdateStatus(conn, os.Getenv("TASK_SERVER")+":"+id, c.GetStatus())
 		}
 	}()
 }
@@ -134,15 +136,22 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 	id := taskAction.ID
 	action := taskAction.Action
 	c := processMap[id]
-	switch action {
-	case task.KILL_ACTION:
-		c.Kill()
-	case task.PAUSE_ACTION:
-		c.Pause()
-	case task.RESUME_ACTION:
-		c.Resume()
+	if c != nil {
+		switch action {
+		case task.KILL_ACTION:
+			c.Kill()
+		case task.PAUSE_ACTION:
+			c.Pause()
+		case task.RESUME_ACTION:
+			c.Resume()
+		}
+		t := utils.TaskAction{id, c.GetStatus()}
+		ws.WriteJSON(t)
+		fmt.Println(c.GetStatus())
+	} else {
+		t := utils.Response{"", "Task evicted"}
+		ws.WriteJSON(t)
 	}
-	fmt.Println(c.GetStatus())
 }
 
 func main() {
@@ -165,7 +174,7 @@ func main() {
 	go func() {
 		for {
 			utils.Heartbeat(conn, os.Getenv("TASK_SERVER"))
-			time.Sleep(1000 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 	}()
 	
