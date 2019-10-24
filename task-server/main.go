@@ -96,9 +96,11 @@ func loop(w http.ResponseWriter, r *http.Request) {
 
 	c := new(task.CommandTask)
 	id := c.Init("python loop.py")
-	fmt.Println(id)
 	if utils.InsertTask(conn, id, username, c.GetStatus(), os.Getenv("TASK_SERVER")) {
 		processMap[id] = c
+		fmt.Println(id)
+		t := utils.Response{id, ""}
+		ws.WriteJSON(t)
 	}
 	go func() {
 		err := c.Run()
@@ -161,8 +163,8 @@ func main() {
 		server = "127.0.0.1:9000"
 	}
 	os.Setenv("TASK_SERVER", server)
-
-	Conn, err := redis.Dial("tcp", "localhost:6379")
+	dialOps := redis.DialKeepAlive(10*60000 * time.Millisecond)
+	Conn, err := redis.Dial("tcp", "localhost:6379", dialOps)
 	if err != nil {
 		panic(err)
 	}
@@ -174,7 +176,7 @@ func main() {
 	go func() {
 		for {
 			utils.Heartbeat(conn, os.Getenv("TASK_SERVER"))
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(1000 * time.Millisecond)
 		}
 	}()
 	
