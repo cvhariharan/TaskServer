@@ -22,16 +22,23 @@ const (
 )
 
 func upload(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	username := "TestUser"
+	endpoint := "/uploads"
+	taskserver := "ws://"+utils.GetRandomServer(conn)+endpoint
 	r.ParseMultipartForm(32 << 20)
 
 	file, fh, err := r.FormFile("image")
 	if err != nil {
-		fmt.Println(err)
+		panic(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	socket = gowebsocket.New("ws://localhost:9000/uploads")
+	socket = gowebsocket.New(taskserver)
 
+	// Maybe choose another taskserver
 	socket.OnConnectError = func(err error, socket gowebsocket.Socket) {
 		log.Fatal("Received connect error - ", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
 	socket.OnConnected = func(socket gowebsocket.Socket) {
@@ -39,24 +46,16 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	socket.OnTextMessage = func(message string, socket gowebsocket.Socket) {
-		log.Println("Received message - " + message)
+		w.Write([]byte(message))
 	}
 
-	socket.OnPingReceived = func(data string, socket gowebsocket.Socket) {
-		log.Println("Received ping - " + data)
-	}
-
-	socket.OnPongReceived = func(data string, socket gowebsocket.Socket) {
-		log.Println("Received pong - " + data)
-	}
-
+	// Maybe choose another taskserver
 	socket.OnDisconnected = func(err error, socket gowebsocket.Socket) {
 		log.Println("Disconnected from server ")
 	}
 
 	socket.Connect()
-
-	u := utils.UploadInfo{fh.Filename, "TestUser"}
+	u := utils.UploadInfo{fh.Filename, username}
 	msg, _ := json.Marshal(u)
 	socket.SendBinary(msg)
 	
@@ -67,6 +66,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 			if err == io.EOF {
 				break
 			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		socket.SendBinary(b)
 	}
@@ -75,14 +75,17 @@ func upload(w http.ResponseWriter, r *http.Request) {
 }
 
 func tasksGateway(w http.ResponseWriter, r *http.Request) {
-	socket = gowebsocket.New("ws://localhost:9000/tasks")
-	socket.Connect()
+	w.Header().Set("Content-Type", "application/json")
+	var resp utils.Response
+	endpoint := "/tasks"
 	username := "TestUser"
 	pid := r.URL.Query().Get("pid")
 	action := r.URL.Query().Get("action")
 
 	if pid == "" || action == "" {
-		w.Write([]byte("Query params must have pid and action"))
+		resp.Err = "Query params must have pid and action"
+		json, _ := json.Marshal(resp)
+		w.Write(json)
 		return
 	}
 
@@ -99,20 +102,53 @@ func tasksGateway(w http.ResponseWriter, r *http.Request) {
 			case task.RESUME_ACTION:
 				t.Action = RESUME_ACTION
 			default:
-				w.Write([]byte("Action not supported"))
+				resp.Err = "Action not supported"
+				json, _ := json.Marshal(resp)
+				w.Write(json)
 				return
 			}
 		}
+		taskserver = "ws://"+taskserver+endpoint
+		fmt.Println(taskserver)
+		socket = gowebsocket.New(taskserver)
+		socket.Connect()
+
+		socket.OnTextMessage = func(message string, socket gowebsocket.Socket) {
+			w.Write([]byte(message))
+		}
+
 		msg, _ := json.Marshal(t)
 		socket.SendBinary(msg)
 	} else {
-		w.Write([]byte("Check pid, pid doesn't exist"))
+		resp.Err = "pid doesn't exist"
+		json, _ := json.Marshal(resp)
+		w.Write(json)
 	}
+	
 }
 
 func loop(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	endpoint := "/loop"
+	taskserver := "ws://"+utils.GetRandomServer(conn)+endpoint
 	username := "TestUser"
-	socket = gowebsocket.New("ws://localhost:9000/loop")
+	socket = gowebsocket.New(taskserver)
+
+	// Maybe choose another taskserver
+	socket.OnConnectError = func(err error, socket gowebsocket.Socket) {
+		log.Fatal("Received connect error - ", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	socket.OnTextMessage = func(message string, socket gowebsocket.Socket) {
+		w.Write([]byte(message))
+	}
+
+	// Maybe choose another taskserver
+	socket.OnDisconnected = func(err error, socket gowebsocket.Socket) {
+		log.Println("Disconnected from server ")
+	}
+
 	socket.Connect()
 	socket.SendText(username)
 }
@@ -123,10 +159,6 @@ func main() {
 		panic(err)
 	}
 	conn = Conn
-	// socket = gowebsocket.New("ws://localhost:9000/loop")
-	// socket.Connect()
-	// msg, _ := json.Marshal(utils.TaskAction{"784eh", task.KILL_ACTION})
-	// socket.SendText("TestUser")
 	http.HandleFunc("/upload", upload)
 	http.HandleFunc("/tasks", tasksGateway)
 	http.HandleFunc("/loop", loop)
