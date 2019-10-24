@@ -34,6 +34,17 @@ func GetRandomServer(conn redis.Conn) string {
     return result
 }
 
+// Returns the taskserver for a given task id
+// else returns empty string
+func GetServer(conn redis.Conn, pid string) string {
+	result, err := redis.String(conn.Do("GET", pid))
+	if err != nil {
+		log.Println(err)
+		return ""
+	}
+	return result
+}
+
 
 func Heartbeat(conn redis.Conn, taskserver string) bool {
 	_, err := conn.Do("SADD", "heartbeat", taskserver)

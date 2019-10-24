@@ -81,16 +81,6 @@ func GetAllTasks(conn redis.Conn, username string) []string {
 	return results
 }
 
-// Returns the taskserver for a given task id
-// else returns empty string
-func GetServer(conn redis.Conn, pid string) string {
-	result, err := redis.String(conn.Do("GET", pid))
-	if err != nil {
-		log.Println(err)
-		return ""
-	}
-	return result
-}
 
 
 
