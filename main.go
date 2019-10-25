@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"fmt"
+	"os"
 	"encoding/json"
 	"github.com/sacOO7/gowebsocket"
 	"github.com/gomodule/redigo/redis"
@@ -23,6 +24,7 @@ const (
 	RESUME_ACTION = task.RESUME_ACTION
 )
 
+// Utility to handle error responses
 func handleError(w http.ResponseWriter, err string) {
 	var resp utils.Response
 	resp.Err = err
@@ -30,6 +32,7 @@ func handleError(w http.ResponseWriter, err string) {
 	w.Write(json)
 }
 
+// Returns a single task as json response
 func taskInfo(w http.ResponseWriter, pid, taskserver, username string) {
 	t := utils.GetTask(conn, pid, taskserver, username)
 	if t.ID == "" {
@@ -40,6 +43,7 @@ func taskInfo(w http.ResponseWriter, pid, taskserver, username string) {
 	w.Write(resp)
 }
 
+// Returns all the tasks of a user as a json array
 func allTaskInfo(w http.ResponseWriter, username string) {
 	var t []utils.TaskInfo
 	ids := utils.GetAllTasks(conn, username)
@@ -53,16 +57,24 @@ func allTaskInfo(w http.ResponseWriter, username string) {
 	w.Write(resp)
 }
 
+// To demonstrate an upload process
+// POST method
 func upload(w http.ResponseWriter, r *http.Request) {
+	exit := false
 	w.Header().Set("Content-Type", "application/json")
 	jwt := r.Header.Get("Authorization")
 	if jwt == "" {
 		handleError(w, "Authorization header must be set with a valid token")
 		return
 	}
+
+	// endpoint of the taskserver. Same nomenclature throughout
 	endpoint := "/uploads"
+
+	// Get a random taskserver using redis which keeps track of all taskservers
 	taskserver := "ws://"+utils.GetRandomServer(conn)+endpoint
 
+	// Authorization header must be set with jwt to get username
 	username := utils.ValidateJWT(jwt)
 	if username == "" {
 		handleError(w, "Invalid JWT")
@@ -89,8 +101,8 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	socket.OnTextMessage = func(message string, socket gowebsocket.Socket) {
-		fmt.Println(message)
 		w.Write([]byte(message))
+		exit = true
 	}
 
 	// Maybe choose another taskserver
@@ -119,9 +131,16 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	// Just to signify the end. Not required but kept for testing
 	socket.SendText("done")
 
+	for !exit {
+
+	}
+
 }
 
+// Endpoint to allow sending control commands to taskserver
+// GET method
 func tasksGateway(w http.ResponseWriter, r *http.Request) {
+	exit := false
 	w.Header().Set("Content-Type", "application/json")
 	endpoint := "/tasks"
 	jwt := r.Header.Get("Authorization")
@@ -143,6 +162,7 @@ func tasksGateway(w http.ResponseWriter, r *http.Request) {
 	taskId := server+":"+pid
 	taskserver := "ws://"+server+endpoint
 
+	// If pid not set, get all tasks of the user
 	if pid == "" {
 		allTaskInfo(w, username)
 		return
@@ -153,6 +173,7 @@ func tasksGateway(w http.ResponseWriter, r *http.Request) {
 
 	socket.OnTextMessage = func(message string, socket gowebsocket.Socket) {
 		w.Write([]byte(message))
+		exit = true
 	}
 
 	// If no action, info has to be returned. Only send
@@ -183,10 +204,18 @@ func tasksGateway(w http.ResponseWriter, r *http.Request) {
 	} else {
 		handleError(w, "Given pid doesn't exist")
 	}
+	// To prevent the handler from exiting before getting the response
+	// from the task server
+	for !exit {
 
+	}
 }
 
+// An example of a long running task
+// tells the taskserver to run an infinite loop
+// GET method
 func loop(w http.ResponseWriter, r *http.Request) {
+	exit := false
 	w.Header().Set("Content-Type", "application/json")
 	endpoint := "/loop"
 	taskserver := "ws://"+utils.GetRandomServer(conn)+endpoint
@@ -203,11 +232,11 @@ func loop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	socket := gowebsocket.New(taskserver)
-
+	socket.Connect()
 	// Maybe choose another taskserver
 	socket.OnConnectError = func(err error, socket gowebsocket.Socket) {
 		log.Fatal("Received connect error - ", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		handleError(w, err.Error())
 	}
 
 	socket.OnConnected = func(socket gowebsocket.Socket) {
@@ -215,20 +244,26 @@ func loop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	socket.OnTextMessage = func(message string, socket gowebsocket.Socket) {
-		fmt.Println(message)
 		w.Write([]byte(message))
+		exit = true
 	}
 
 	// Maybe choose another taskserver
 	socket.OnDisconnected = func(err error, socket gowebsocket.Socket) {
 		log.Println("Disconnected from server ")
 	}
-	socket.Connect()
 	socket.SendText(username)
-	
+
+	// To prevent the handler from exiting before getting the response
+	// from the task server
+	for !exit {
+
+	}
 }
 	
-
+// Returns a jwt for a username
+// Just an example and no auth performed
+// POST method
 func getToken(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var resp utils.Response
@@ -256,7 +291,7 @@ func getToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	Conn, err := redis.Dial("tcp", "localhost:6379")
+	Conn, err := redis.Dial("tcp", os.Getenv("REDIS_HOST"))
 	if err != nil {
 		panic(err)
 	}
