@@ -52,10 +52,12 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := new(task.CommandTask)
-	id := c.Init("cp /dev/stdin " + uploadInfo.Filename)
+	command := "cp /dev/stdin " + uploadInfo.Filename
+	id := c.Init(command)
 	fmt.Println(id)
 	c.SetInput(re)
-	if utils.InsertTask(conn, id, uploadInfo.Username, c.GetStatus(), os.Getenv("TASK_SERVER")) {
+	taskInfo := utils.TaskInfo{id, uploadInfo.Username, c.GetStatus(), os.Getenv("TASK_SERVER"), command}
+	if utils.InsertTask(conn, taskInfo) {
 		processMap[id] = c
 		t := utils.Response{id, ""}
 		ws.WriteJSON(t)
@@ -95,8 +97,10 @@ func loop(w http.ResponseWriter, r *http.Request) {
 	username := string(message)
 
 	c := new(task.CommandTask)
-	id := c.Init("python loop.py")
-	if utils.InsertTask(conn, id, username, c.GetStatus(), os.Getenv("TASK_SERVER")) {
+	command := "python loop.py"
+	id := c.Init(command)
+	taskInfo := utils.TaskInfo{id, username, c.GetStatus(), os.Getenv("TASK_SERVER"), command}
+	if utils.InsertTask(conn, taskInfo) {
 		processMap[id] = c
 		fmt.Println(id)
 		t := utils.Response{id, ""}

@@ -10,22 +10,22 @@ type TaskInfo struct {
 	Owner string
 	Status string
 	TaskServer string
+	Command string
 }
 
 // Insert the task into a hashmap with key as taskserver:id and also add 
 // taskserver:id to a set corresponding to each username
-func InsertTask(conn redis.Conn, id, owner, status, taskserver string) bool {
-	t := TaskInfo{id, owner, status, taskserver}
-	taskId := taskserver+":"+id
+func InsertTask(conn redis.Conn, t TaskInfo) bool {
+	taskId := t.TaskServer+":"+t.ID
 	_, err := conn.Do("HMSET", redis.Args{taskId}.AddFlat(t)...)
 	if err != nil {
 		return false
 	}
-	_, err = conn.Do("SADD", owner, taskId)
+	_, err = conn.Do("SADD", t.Owner, taskId)
 	if err != nil {
 		return false
 	}
-	_, err = conn.Do("SET", id, taskserver)
+	_, err = conn.Do("SET", t.ID, t.TaskServer)
 	if err != nil {
 		return false
 	}
