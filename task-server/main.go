@@ -51,11 +51,14 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 
+	// Create a copy process and feed the file inputs into stdin
 	c := new(task.CommandTask)
 	command := "cp /dev/stdin " + uploadInfo.Filename
 	id := c.Init(command)
 	fmt.Println(id)
 	c.SetInput(re)
+	
+	// Update the info to redis and store a reference to the task object
 	taskInfo := utils.TaskInfo{id, uploadInfo.Username, c.GetStatus(), os.Getenv("TASK_SERVER"), command}
 	if utils.InsertTask(conn, taskInfo) {
 		processMap[id] = c
@@ -63,6 +66,8 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		ws.WriteJSON(t)
 	}
 
+	// Waitgroup used to prevent the handler from closing before the task 
+	// completes
 	wg.Add(1)
 	go func(wg *sync.WaitGroup){
 		err := c.Run()
@@ -72,6 +77,8 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		wg.Done()
 	}(&wg)
 
+	// Read the chunks from the websocket connection and write to a 
+	// pipe connected to stdin
 	for {
 		_, message, err := ws.ReadMessage()
 		if err != nil {
@@ -139,6 +146,7 @@ func taskHandler(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 
+	// Get the task from the map and apply the action
 	id := taskAction.ID
 	action := taskAction.Action
 	c := processMap[id]
