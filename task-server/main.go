@@ -164,7 +164,7 @@ func main() {
 	}
 	os.Setenv("TASK_SERVER", server)
 	dialOps := redis.DialKeepAlive(10*60000 * time.Millisecond)
-	Conn, err := redis.Dial("tcp", "localhost:6379", dialOps)
+	Conn, err := redis.Dial("tcp", os.Getenv("REDIS_HOST"), dialOps)
 	if err != nil {
 		panic(err)
 	}
