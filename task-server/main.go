@@ -97,7 +97,7 @@ func loop(w http.ResponseWriter, r *http.Request) {
 	username := string(message)
 
 	c := new(task.CommandTask)
-	command := "python loop.py"
+	command := "python3.6 loop.py"
 	id := c.Init(command)
 	taskInfo := utils.TaskInfo{id, username, c.GetStatus(), os.Getenv("TASK_SERVER"), command}
 	if utils.InsertTask(conn, taskInfo) {
@@ -168,7 +168,7 @@ func main() {
 	}
 	os.Setenv("TASK_SERVER", server)
 	dialOps := redis.DialKeepAlive(10*60000 * time.Millisecond)
-	Conn, err := redis.Dial("tcp", os.Getenv("REDIS_HOST"), dialOps)
+	Conn, err := redis.Dial("tcp", os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"), dialOps)
 	if err != nil {
 		panic(err)
 	}

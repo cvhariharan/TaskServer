@@ -9,5 +9,6 @@ RUN go get github.com/sacOO7/gowebsocket
 RUN go get github.com/gomodule/redigo/redis
 RUN go get github.com/rs/xid
 RUN go install -v ./...
+EXPOSE 8080
 
 CMD ["app"]

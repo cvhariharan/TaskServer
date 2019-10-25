@@ -1,0 +1,31 @@
+version: '3'
+services:
+  api-server:
+    image: api-server
+    ports:
+      - '8080:8000'
+    links:
+      - redis
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+    networks: 
+      - atlan
+  task-server:
+    image: task-server
+    links:
+      - redis
+      - api-server
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+    networks: 
+      - atlan
+  redis:
+    image: 'redis:4.0.11'
+    networks: 
+      - atlan
+
+networks:
+  atlan:
+    driver: "bridge"

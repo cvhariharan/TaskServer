@@ -291,11 +291,12 @@ func getToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	Conn, err := redis.Dial("tcp", os.Getenv("REDIS_HOST"))
+	Conn, err := redis.Dial("tcp", os.Getenv("REDIS_HOST") + ":" + os.Getenv("REDIS_PORT"))
 	if err != nil {
 		panic(err)
 	}
 	conn = Conn
+	fmt.Println("API-SERVER")
 	// jwt := utils.GenerateJWT("TestUser")
 	// fmt.Println(jwt)
 	// fmt.Println(utils.ValidateJWT(jwt))
@@ -303,5 +304,5 @@ func main() {
 	http.HandleFunc("/tasks", tasksGateway)
 	http.HandleFunc("/loop", loop)
 	http.HandleFunc("/auth/token", getToken)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8000", nil))
 }
