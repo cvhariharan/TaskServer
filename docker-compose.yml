@@ -10,7 +10,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: '6379'
     networks: 
-      - atlan
+      - skynet
   task-server:
     image: task-server
     links:
@@ -20,11 +20,11 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: '6379'
     networks: 
-      - atlan
+      - skynet
   redis:
     image: 'redis:4.0.11'
     networks: 
-      - atlan
+      - skynet
 
 networks:
   atlan:
